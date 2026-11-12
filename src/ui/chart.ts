@@ -33,7 +33,7 @@ export function drawChart(
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
-  ctx.fillStyle = '#1a2332';
+  ctx.fillStyle = '#f5f7fa';
   ctx.fillRect(0, 0, width, height);
 
   function x(i: number): number {
@@ -49,7 +49,7 @@ export function drawChart(
   }
 
   // Grid
-  ctx.strokeStyle = '#38444d';
+  ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 0.5;
   for (let i = 0; i <= 5; i++) {
     const y = padding.top + (i / 5) * chartHeight;

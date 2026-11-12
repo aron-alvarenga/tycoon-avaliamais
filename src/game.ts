@@ -68,7 +68,7 @@ export function setSpeed(multiplier: 1 | 2 | 4): void {
 }
 
 function runOneTick(): void {
-  if (state.isGameOver || state.isVictory) {
+  if (state.isPaused || state.isGameOver || state.isVictory) {
     return;
   }
   const mult = state.speedMultiplier;

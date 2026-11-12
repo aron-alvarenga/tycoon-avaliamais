@@ -21,6 +21,7 @@ import {
 } from './sim/formulas';
 
 const app = document.getElementById('app')!;
+let activePanel = 'schools';
 
 function formatMoney(cents: number): string {
   return 'R$ ' + (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,21 +39,21 @@ function getHelpContent(): string {
     <h3>Indicadores e o que fazer</h3>
     <p>Frequência média, média de notas, diários/planos em dia, alertas (turmas críticas) e satisfação são exibidos <strong>por escola</strong> no painel "Escolas da rede". Acompanhe cada unidade e use as ações na escola que precisar.</p>
     <ul class="help-list">
-      <li><strong>Frequência média baixa</strong> — Muitas faltas. Use <strong>Campanha de frequência</strong> na escola afetada; invista em <strong>Melhorar infraestrutura</strong> e mais <strong>Docentes</strong> para não sobrecarregar turmas.</li>
-      <li><strong>Média de notas baixa</strong> — Desempenho fraco. Use <strong>Recuperação de notas</strong> na escola; <strong>Capacitar docente</strong> e <strong>Melhorar infraestrutura</strong> ajudam no longo prazo.</li>
-      <li><strong>Diários/planos em dia baixo</strong> — Registros atrasados. Use <strong>Capacitar docente</strong> (melhora o preenchimento) e <strong>Manutenção emergencial</strong> para alívio rápido.</li>
-      <li><strong>Muitos alertas (turmas críticas)</strong> — Turmas com frequência ou média crítica. Combine <strong>Campanha de frequência</strong>, <strong>Recuperação de notas</strong> e <strong>Manutenção emergencial</strong> nas escolas com mais alertas.</li>
-      <li><strong>Satisfação baixa</strong> — Resultado dos outros indicadores. Melhore frequência, notas e diários em dia; reduza alertas.</li>
+      <li><strong>Muitas faltas:</strong> faça uma <strong>Campanha de frequência</strong> na escola afetada. Melhorar a infraestrutura e contratar docentes também ajuda.</li>
+      <li><strong>Notas baixas:</strong> use <strong>Recuperação de notas</strong> para reforço imediato. Capacite os docentes e melhore a infraestrutura para manter as notas altas.</li>
+      <li><strong>Diários atrasados:</strong> capacite os docentes para melhorar os registros. A <strong>Manutenção emergencial</strong> também ajuda a colocar os diários em dia.</li>
+      <li><strong>Alertas nas turmas:</strong> confira a frequência e os diários da escola. Escolha a ação de acordo com o indicador que caiu.</li>
+      <li><strong>Comunidade insatisfeita:</strong> a satisfação acompanha os resultados da rede. Melhore a frequência, as notas e os registros para recuperar a confiança das famílias.</li>
     </ul>
 
     <h3>Ações e custos</h3>
     <p>Cada ação tem custo em orçamento. Construir escola e melhorar infraestrutura são os mais caros; campanhas e manutenção emergencial têm custo médio; contratar e capacitar docentes também custam. Fique de olho no orçamento e nos indicadores para escolher a melhor ação no momento.</p>
 
     <h3>Eventos aleatórios</h3>
-    <p>Eventos (chuva, greve, corte de verba, bônus federal, etc.) mudam temporariamente receita ou indicadores. Cada evento mostra <strong>Título</strong>, <strong>Descrição</strong> e <strong>Dica</strong> — use a dica para decidir a melhor resposta.</p>
+    <p>Chuva, greve e cortes de verba podem mudar os planos. Leia o aviso na escola afetada e a dica de como resolver o problema. Alguns eventos só terminam quando você toma uma das ações indicadas; outros acabam no fechamento do bimestre.</p>
 
     <h3>Fim de jogo</h3>
-    <p>Você <strong>perde</strong> antes dos 3 anos se: o orçamento ficar negativo por muito tempo (a SEMED intervém) ou se os indicadores da rede (frequência média, média de notas, satisfação) ficarem <strong>críticos por mais de um bimestre</strong> — nesse caso você é <strong>exonerado por não conseguir gerir a educação</strong>. Reaja rápido aos eventos e às quedas de indicadores para evitar a exoneração.</p>
+    <p>Você pode perder o cargo antes dos 3 anos. O orçamento negativo por <strong>30 dias seguidos</strong> leva à intervenção. Frequência, notas ou satisfação em situação crítica por <strong>45 dias seguidos</strong> também encerram a gestão. Depois do dia 90, frequência abaixo de 50% encerra a partida; depois do dia 180, satisfação abaixo de 20% tem o mesmo efeito.</p>
   `;
 }
 
@@ -93,6 +94,8 @@ function renderIntroScreen(): void {
 }
 
 function openHelpModal(): void {
+  const resume = !!app.querySelector('.game-shell') && !game.getState().isPaused;
+  if (resume) game.setPaused(true);
   const overlay = document.createElement('div');
   overlay.className = 'overlay help-overlay';
   overlay.innerHTML = `
@@ -105,6 +108,7 @@ function openHelpModal(): void {
   overlay.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).classList.contains('overlay') || (e.target as HTMLElement).closest?.('[data-close-help]')) {
       overlay.remove();
+      if (resume) game.setPaused(false);
     }
   });
   document.body.appendChild(overlay);
@@ -145,6 +149,8 @@ function networkIndicators(s: SimState): { attendance: number; averageGrade: num
 
 function renderGame(): void {
   const s = game.getState();
+  const schoolScrollTop = app.querySelector('.school-panel')?.scrollTop ?? 0;
+  const ind = networkIndicators(s);
   const totalStudents = s.schools.reduce((a, e) => a + e.students, 0);
   const budgetClass = s.budgetCents < 0 ? 'negative' : 'positive';
 
@@ -197,17 +203,17 @@ function renderGame(): void {
       </div>
       ${(sc.activeEvents && sc.activeEvents.length) ? `
       <div class="school-events">
-        <strong>⚠️ Eventos ativos (${sc.activeEvents.length}):</strong>
+        <strong>Eventos ativos (${sc.activeEvents.length})</strong>
         ${sc.activeEvents.map((ev) => `<div class="school-event"><strong>${ev.name}</strong><br><span class="event-tip">${ev.tip}</span></div>`).join('')}
       </div>` : ''}
       <div class="school-actions">
-        <button class="btn btn-secondary btn-expand" data-school-id="${sc.id}">Expandir +50 vagas (${formatMoney(SCHOOL_EXPAND_COST_PER_50)})</button>
-        <button class="btn btn-secondary btn-infra" data-school-id="${sc.id}" ${sc.infrastructureLevel >= 5 ? 'disabled' : ''}>Melhorar infraestrutura (${formatMoney(INFRASTRUCTURE_LEVEL_COST_CENTS)})</button>
-        <button class="btn btn-primary btn-hire" data-school-id="${sc.id}">Contratar docente (${formatMoney(TEACHER_HIRE_COST_CENTS)})</button>
-        <button class="btn btn-secondary btn-train" data-teacher-id="${firstTeacherId ?? ''}" ${!firstTeacherId ? 'disabled' : ''}>Capacitar docente (${formatMoney(TEACHER_TRAINING_COST_CENTS)})</button>
-        <button class="btn btn-warning btn-campaign-att" data-school-id="${sc.id}" ${hasCampaignAtt ? 'disabled' : ''}>Campanha de frequência (${formatMoney(CAMPAIGN_ATTENDANCE_COST_CENTS)})</button>
-        <button class="btn btn-warning btn-campaign-grade" data-school-id="${sc.id}" ${hasCampaignGrade ? 'disabled' : ''}>Recuperação de notas (${formatMoney(CAMPAIGN_GRADE_COST_CENTS)})</button>
-        <button class="btn btn-secondary btn-maintenance" data-school-id="${sc.id}">Manutenção emergencial (${formatMoney(MAINTENANCE_EMERGENCY_COST_CENTS)})</button>
+        <button class="btn btn-secondary btn-expand" data-school-id="${sc.id}">Expandir +50 vagas <span class="action-cost">${formatMoney(SCHOOL_EXPAND_COST_PER_50)}</span></button>
+        <button class="btn btn-secondary btn-infra" data-school-id="${sc.id}" ${sc.infrastructureLevel >= 5 ? 'disabled' : ''}>Melhorar infraestrutura <span class="action-cost">${formatMoney(INFRASTRUCTURE_LEVEL_COST_CENTS)}</span></button>
+        <button class="btn btn-primary btn-hire" data-school-id="${sc.id}">Contratar docente <span class="action-cost">${formatMoney(TEACHER_HIRE_COST_CENTS)}</span></button>
+        <button class="btn btn-secondary btn-train" data-teacher-id="${firstTeacherId ?? ''}" ${!firstTeacherId ? 'disabled' : ''}>Capacitar docente <span class="action-cost">${formatMoney(TEACHER_TRAINING_COST_CENTS)}</span></button>
+        <button class="btn btn-warning btn-campaign-att" data-school-id="${sc.id}" ${hasCampaignAtt ? 'disabled' : ''}>Campanha de frequência <span class="action-cost">${formatMoney(CAMPAIGN_ATTENDANCE_COST_CENTS)}</span></button>
+        <button class="btn btn-warning btn-campaign-grade" data-school-id="${sc.id}" ${hasCampaignGrade ? 'disabled' : ''}>Recuperação de notas <span class="action-cost">${formatMoney(CAMPAIGN_GRADE_COST_CENTS)}</span></button>
+        <button class="btn btn-secondary btn-maintenance" data-school-id="${sc.id}">Manutenção emergencial <span class="action-cost">${formatMoney(MAINTENANCE_EMERGENCY_COST_CENTS)}</span></button>
       </div>
     </li>
   `;
@@ -223,7 +229,7 @@ function renderGame(): void {
   };
 
   app.innerHTML = `
-    <header class="header">
+    <div class="game-shell" data-panel="${activePanel}"><header class="header">
       <div>
         <h1>Avalia+ Tycoon da Educação</h1>
         <div class="header-sub">Ano ${s.currentYear} · ${s.currentBimester}º bimestre · Dia ${s.currentDay}</div>
@@ -261,45 +267,58 @@ function renderGame(): void {
       </div>
     </section>
 
+    <section class="mission-strip" aria-label="Metas da rede">
+      <div><span class="eyebrow">MISSÃO · 3 ANOS LETIVOS</span><strong>Cumpra as metas a cada ano.</strong></div>
+      <div class="goal ${ind.attendance >= s.targetAttendance ? 'met' : ''}"><span>Frequência / meta ${s.targetAttendance}%</span><strong>${ind.attendance.toFixed(1)}%</strong><progress max="100" value="${ind.attendance}"></progress></div>
+      <div class="goal ${ind.averageGrade >= s.targetAverageGrade ? 'met' : ''}"><span>Notas / meta ${s.targetAverageGrade}</span><strong>${ind.averageGrade.toFixed(1)}</strong><progress max="10" value="${ind.averageGrade}"></progress></div>
+      <div class="goal"><span>Comunidade</span><strong>${s.communitySatisfaction.toFixed(0)}% satisfeita</strong></div>
+    </section>
     ${s.activeEventModifiers?.length && s.lastEventTitle ? `
     <div class="event-banner">
-      <strong>⚠️ ${s.lastEventTitle}</strong>
+      <strong>${s.lastEventTitle}</strong>
       <p class="event-desc">${s.lastEventDescription || ''}</p>
       <p class="event-tip"><strong>Dica:</strong> ${s.lastEventTip || ''}</p>
     </div>` : ''}
 
+    <nav class="view-switch" aria-label="Painéis do jogo"><button class="btn ${activePanel === 'schools' ? 'btn-active' : ''}" data-panel-switch="schools">Escolas</button><button class="btn ${activePanel === 'network' ? 'btn-active' : ''}" data-panel-switch="network">Central da rede</button></nav>
     <div class="panels">
       <div>
-        <div class="panel">
+        <div class="panel school-panel">
           <h2>Escolas da rede</h2>
           <ul class="school-list">${schoolsHtml}</ul>
         </div>
         <div class="panel chart-panel">
           <h2>Evolução dos indicadores</h2>
           <div class="chart-container">
-            <canvas id="chart" width="600" height="200"></canvas>
+            ${s.indicatorHistory.length < 2 ? '<p class="empty-chart">O primeiro balanço chega no fechamento do bimestre.</p>' : '<canvas id="chart"></canvas>'}
           </div>
         </div>
       </div>
       <div>
         <div class="panel actions-panel">
           <h2>Ações</h2>
-          <button class="btn btn-success" data-build-school>Construir nova escola (${formatMoney(SCHOOL_BUILD_COST_CENTS)})</button>
-          <button class="btn btn-danger" data-emergency-fund ${s.emergencyFundUsed ? 'disabled' : ''} title="${s.emergencyFundUsed ? 'Já utilizado nesta partida' : 'Adiciona R$ 10.000 ao orçamento. Uso único.'}">Verba emergencial (+${formatMoney(EMERGENCY_FUND_CENTS)}) — uso único</button>
+          <button class="btn btn-success" data-build-school>Construir nova escola <span class="action-cost">${formatMoney(SCHOOL_BUILD_COST_CENTS)}</span></button>
+          <button class="btn btn-danger" data-emergency-fund ${s.emergencyFundUsed ? 'disabled' : ''} title="${s.emergencyFundUsed ? 'Já utilizada nesta partida' : 'Adiciona R$ 10.000 ao orçamento. Uso único.'}">Verba emergencial (+${formatMoney(EMERGENCY_FUND_CENTS)}). Uso único</button>
           <div class="next-event">
             <strong>Próximo evento:</strong><br>${s.nextEventLabel} em ${s.nextEventDays} dias
           </div>
         </div>
       </div>
-    </div>
+    </div></div>
   `;
 
+  const schoolPanel = app.querySelector('.school-panel');
+  if (schoolPanel) schoolPanel.scrollTop = schoolScrollTop;
+  app.querySelectorAll<HTMLElement>('[data-panel-switch]').forEach(btn => btn.addEventListener('click', () => {
+    activePanel = btn.dataset.panelSwitch!;
+    renderGame();
+  }));
   // Chart
   const chartEl = document.getElementById('chart') as HTMLCanvasElement;
   if (chartEl && s.indicatorHistory.length > 0) {
     const container = chartEl.parentElement!;
     const w = container.clientWidth;
-    const h = 200;
+    const h = container.clientHeight;
     drawChart(chartEl, s.indicatorHistory, w, h);
   }
 
@@ -324,7 +343,7 @@ function renderGame(): void {
   app.querySelector('[data-help]')?.addEventListener('click', () => openHelpModal());
   app.querySelector('[data-build-school]')?.addEventListener('click', () => {
     const r = game.buildSchool();
-    if (r.ok) showToast('Escola em construção!', 'success');
+    if (r.ok) showToast('Nova escola aberta. Contrate docentes para receber os alunos.', 'success');
     else showToast(r.reason, 'error');
     renderGame();
   });
@@ -405,17 +424,51 @@ function renderEndGameModal(state: SimState): void {
   const ind = networkIndicators(state);
   const totalStudents = state.schools.reduce((a, e) => a + e.students, 0);
   const isVictory = state.isVictory;
-  const closing = isVictory
-    ? 'Parabéns! Você equilibrou recursos e indicadores e conduziu a rede aos objetivos.'
-    : 'Conselhos para a próxima: mantenha o orçamento no positivo, invista em docentes e infraestrutura, e use as dicas dos eventos para reagir a cada situação.';
+  const financial = /Orçamento/.test(state.endMessage);
+  const expired = /período/.test(state.endMessage);
+  const title = isVictory ? 'Metas cumpridas. Mandato aprovado!' : financial ? 'Faltou verba para continuar.' : expired ? 'Fim do mandato. Faltaram as metas.' : 'Você perdeu o cargo.';
+  const story = isVictory
+    ? `A frequência e as notas ficaram dentro das metas nos três fechamentos anuais. Sua rede termina o mandato com ${state.schools.length} escolas e ${totalStudents} alunos. Deu trabalho, mas deu certo.`
+    : financial ? `O orçamento ficou negativo por 30 dias seguidos e a gestão sofreu intervenção. As ${state.schools.length} escolas continuam, mas com outra pessoa no comando.`
+    : expired ? `Os três anos passaram e nem todos os fechamentos anuais tiveram as metas cumpridas. Você encerra o mandato com ${totalStudents} alunos na rede.`
+    : `A situação da rede custou seu cargo no dia ${state.currentDay}. A prefeitura vai nomear outra pessoa para cuidar das ${state.schools.length} escolas.`;
+  const closingRemarks = isVictory ? [
+    'Metas cumpridas, diários conferidos. Dá até para tomar o café da sala dos professores ainda quente.',
+    'A rede foi tão bem que sobrou tempo para procurar aquela chave do armário de materiais.',
+    'Pode comemorar com a equipe! Só não use o verso do relatório final para anotar a lista do lanche.',
+  ] : financial ? [
+    'Na lista de compras tinha papel, tinta e lâmpadas. Faltou incluir o dinheiro para pagar tudo.',
+    'Você economizou até nos clipes, mas abriu outra escola. A conta era um pouquinho maior que a caixa de papelaria.',
+    'A escola nova ficou bonita no planejamento. A conta de manutenção veio sem pedir licença.',
+  ] : ind.attendance < state.targetAttendance ? [
+    'O cartaz da campanha ficou ótimo. Na próxima, vale tirar uma cópia para fora da sala da coordenação.',
+    'Você conferiu a frequência em três planilhas. Era a mesma frequência, só que com mais abas abertas.',
+    'O plano de acompanhamento estava na pasta certa. O problema foi lembrar qual era a pasta certa.',
+  ] : ind.averageGrade < state.targetAverageGrade ? [
+    'Você aumentou a fonte do boletim. As notas ficaram maiores, mas só no tamanho da letra.',
+    'O material de recuperação estava pronto. A impressora escolheu justamente esse dia para pedir toner.',
+    'O plano de recuperação tinha capa, sumário e tudo. Na próxima, reserve um tempo para as aulas também.',
+  ] : [
+    'Você escreveu resolver depois num post-it. Agora tem um mural inteiro de depois.',
+    'A agenda ficou organizada por cores. Só faltou encontrar um horário livre para executar o planejamento.',
+    'O último sinal tocou e ainda tinha tarefa na mesa da coordenação. Nem tudo cabe nos cinco minutinhos finais.',
+  ];
+  const advice = isVictory ? 'Quer tentar de novo? Abra mais escolas e veja se consegue fechar os três anos com uma rede maior.'
+    : financial ? 'Na próxima partida, guarde dinheiro para os dias até o repasse. Cada escola nova também aumenta a conta de manutenção.'
+    : ind.attendance < state.targetAttendance ? `A frequência ficou ${(state.targetAttendance - ind.attendance).toFixed(1)} pontos percentuais abaixo da meta. Faça campanhas nas escolas com mais faltas e confira se há docentes suficientes.`
+    : ind.averageGrade < state.targetAverageGrade ? `A média terminou em ${ind.averageGrade.toFixed(1)}, abaixo da meta de ${state.targetAverageGrade.toFixed(1)}. Capacite docentes e faça recuperação nas escolas com notas baixas.`
+    : 'Confira as metas antes de cada fechamento do ano letivo. Distribua os investimentos ao longo do calendário escolar.';
+  const closing = `${closingRemarks[Math.floor(Math.random() * closingRemarks.length)]} ${advice}`;
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay end-game-overlay';
   overlay.setAttribute('data-end-game', '');
   overlay.innerHTML = `
     <div class="overlay-box end-game-modal ${isVictory ? 'victory' : 'defeat'}">
-      <h2>${isVictory ? 'Vitória!' : 'Fim de jogo'}</h2>
-      <p class="end-game-message">${state.endMessage}</p>
+      <span class="eyebrow">${isVictory ? 'MANDATO CONCLUÍDO' : 'BALANÇO DO MANDATO'}</span>
+      <h2>${title}</h2>
+      <p class="end-game-message">${story}</p>
+      <p class="end-reason">${state.endMessage}</p>
       <div class="end-game-overview">
         <h3>Visão geral</h3>
         <ul>
@@ -440,8 +493,7 @@ function handleEndGameDismissClick(e: Event): void {
   const dismissBtn = el?.closest?.('[data-end-game-dismiss]');
   const overlay: Element | null = dismissBtn?.closest?.('[data-end-game]') ?? (el?.closest?.('[data-end-game]') ?? (el?.hasAttribute?.('data-end-game') ? el : null));
   if (!overlay) return;
-  const isBackdrop = target === overlay;
-  if (dismissBtn || isBackdrop) {
+  if (dismissBtn) {
     e.preventDefault();
     e.stopPropagation();
     overlay.remove();
@@ -472,3 +524,7 @@ game.subscribe((s) => {
 });
 
 init();
+
+window.addEventListener('resize', () => {
+  if (app.querySelector('.game-shell')) renderGame();
+});
